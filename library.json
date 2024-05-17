@@ -1,0 +1,14 @@
+{
+	"name": "libsesame2mqtt",
+	"version": "v0.0.1",
+	"description": "",
+	"license": "MIT",
+	"frameworks": "*",
+	"platforms": "*",
+	"build": {
+		"includeDir": "main/include",
+		"flags": [
+        "-Wall -Wextra -Wno-format"]
+	},
+	"dependencies": {}
+}

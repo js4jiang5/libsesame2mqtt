@@ -7,7 +7,7 @@ static const char * TAG = "main.c";
 static void ssm_action_handle(sesame * ssm) {
     ESP_LOGI(TAG, "[ssm_action_handle][ssm status: %s]", SSM_STATUS_STR(ssm->device_status));
     if (ssm->device_status == SSM_UNLOCKED) {
-        ssm_lock(NULL, 0);
+        ssm_lock(ssm, NULL, 0);
     }
 }
 
