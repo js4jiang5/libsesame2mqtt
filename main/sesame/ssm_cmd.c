@@ -3,7 +3,6 @@
 #include "blecent.h"
 #include "esp_log.h"
 #include "esp_random.h"
-#include "esp_task_wdt.h"
 #include "uECC.h"
 #include <string.h>
 
@@ -64,7 +63,6 @@ void send_login_cmd_to_ssm(sesame * ssm) {
         ESP_LOGW(TAG, "cnt_ssms = %d, cnt_unregistered_ssms = %d", cnt_ssms, cnt_unregistered_ssms);
     }
     ssm->wait_for_status_update_from_ssm = 1; // start waiting for status update
-    esp_task_wdt_reset();                     // reset WDT to avoid trigger watchdog of loop()
     if (!sesame_search_done()) {              // if search is not done yet, restart BLE scan
         ble_hs_cfg.sync_cb();                 // bls_hs_cfg.sync_cb callback function is blecent_scan, which invoke ble_gap_disc()
     }
