@@ -121,7 +121,9 @@ static void mqtt_event_handler(void * handler_args, esp_event_base_t base, int32
 		ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
 		// msg_id = esp_mqtt_client_subscribe(client, "HA-SesameLock/set", 2); // QOS 2
 		// ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-
+		if (mqtt_discovery_done) { // if MQTT broker disconnect and reconnect, reboot ESP. Currently I don't know a better way to solve it without reboot 20240522 by JS
+			esp_restart();
+		}
 		mqtt_init_done = 1;
 		break;
 	case MQTT_EVENT_DISCONNECTED:
@@ -153,6 +155,7 @@ static void mqtt_event_handler(void * handler_args, esp_event_base_t base, int32
 		// find ssm
 		sesame *ssm = NULL, *tch = NULL;
 		char topic[80] = "";
+		char empty_payload[2] = "";
 		uint8_t valid = 0;
 		for (int n = 0; n < cnt_ssms; n++) {
 			memset(topic, 0, sizeof(topic));
@@ -233,12 +236,12 @@ static void mqtt_event_handler(void * handler_args, esp_event_base_t base, int32
 						tch_add_sesame(tch, ssm);
 						ESP_LOGI(TAG, "Add sesame with mac = %s", addr);
 						vTaskDelay(200 / portTICK_PERIOD_MS);
-						int msg_id = 0;
-						memset(topic, 0, sizeof(topic));
-						sprintf(topic, "homeassistant/%s/state/add_sesame", ssm->topic);  // config topic
-						msg_id = esp_mqtt_client_publish(client_ssm, topic, "", 0, 2, 0); // QOS 2, retain 1
-						ESP_LOGI(TAG, "sent \"\" for add_sesame for %s, msg_id=%d", ssm->topic, msg_id);
-						wait_published(msg_id);
+						//int msg_id = 0;
+						//memset(topic, 0, sizeof(topic));
+						//sprintf(topic, "homeassistant/%s/state/add_sesame", ssm->topic); // config topic
+						//msg_id = esp_mqtt_client_publish(client_ssm, topic, empty_payload, 0, 2, 0); // QOS 2, retain 1
+						//ESP_LOGI(TAG, "sent \"\" for add_sesame for %s, msg_id=%d", ssm->topic, msg_id);
+						//wait_published(msg_id);
 					}
 				}
 				disconnect(tch);
@@ -264,12 +267,12 @@ static void mqtt_event_handler(void * handler_args, esp_event_base_t base, int32
 						tch_remove_sesame(tch, ssm);
 						ESP_LOGI(TAG, "Remove sesame with mac = %s", addr);
 						vTaskDelay(200 / portTICK_PERIOD_MS);
-						int msg_id = 0;
-						memset(topic, 0, sizeof(topic));
-						sprintf(topic, "homeassistant/%s/state/remove_sesame", ssm->topic); // config topic
-						msg_id = esp_mqtt_client_publish(client_ssm, topic, "", 0, 2, 0);	// QOS 2, retain 1
-						ESP_LOGI(TAG, "sent \"\" for remove_sesame for %s, msg_id=%d", ssm->topic, msg_id);
-						wait_published(msg_id);
+						//int msg_id = 0;
+						//memset(topic, 0, sizeof(topic));
+						//sprintf(topic, "homeassistant/%s/state/remove_sesame", ssm->topic); // config topic
+						//msg_id = esp_mqtt_client_publish(client_ssm, topic, empty_payload, 0, 2, 0); // QOS 2, retain 1
+						//ESP_LOGI(TAG, "sent \"\" for remove_sesame for %s, msg_id=%d", ssm->topic, msg_id);
+						//wait_published(msg_id);
 					}
 				}
 				disconnect(tch);
@@ -553,7 +556,7 @@ void mqtt_discovery(void) {
 			cnt += sprintf(payload + cnt, "}");
 			memset(topic, 0, sizeof(topic));
 			sprintf(topic, "homeassistant/button/%s_horizon_calibration/config", ssm->topic); // config topic
-			msg_id = esp_mqtt_client_publish(client_ssm, topic, payload, 0, 2, 1);			  // QOS 2, retain 1
+			msg_id = esp_mqtt_client_publish(client_ssm, topic, payload, 0, 2, 1);			 // QOS 2, retain 1
 			ESP_LOGI(TAG, "sent mqtt horizon calibration config for %s, msg_id=%d", ssm->topic, msg_id);
 			wait_published(msg_id);
 
@@ -908,12 +911,13 @@ void mqtt_discovery(void) {
 void mqtt_subscribe(void) {
 	int msg_id = 0;
 	char topic[80];
+	char empty_payload[2] = "";
 	for (int n = 0; n < cnt_ssms; n++) { // subscribe
 		sesame * ssm = &(p_ssms_env + n)->ssm;
 		memset(topic, 0, sizeof(topic));
 		sprintf(topic, "homeassistant/%s/set", ssm->topic);					  // command topic
 		if (ssm->is_new) {													  // if just registered, clear the retained message before subscribe
-			msg_id = esp_mqtt_client_publish(client_ssm, topic, "", 0, 0, 1); // QOS 0, retain 1
+			msg_id = esp_mqtt_client_publish(client_ssm, topic, NULL, 0, 0, 1); // QOS 0, retain 1
 			ESP_LOGI(TAG, "clear retained message for %s, msg_id=%d", topic, msg_id);
 		}
 		msg_id = esp_mqtt_client_subscribe(client_ssm, topic, 2); // QOS 2
@@ -923,14 +927,14 @@ void mqtt_subscribe(void) {
 		memset(topic, 0, sizeof(topic));
 		sprintf(topic, "homeassistant/%s/state", ssm->topic);				  // command topic
 		if (ssm->is_new) {													  // if just registered, clear the retained message before subscribe
-			msg_id = esp_mqtt_client_publish(client_ssm, topic, "", 0, 0, 1); // QOS 0, retain 1
+			msg_id = esp_mqtt_client_publish(client_ssm, topic, NULL, 0, 0, 1); // QOS 0, retain 1
 			ESP_LOGI(TAG, "clear retained message for %s, msg_id=%d", topic, msg_id);
 		}
 
 		// set empty default value for qr code test for both Sesame Lock and Touch
 		memset(topic, 0, sizeof(topic));
 		sprintf(topic, "homeassistant/%s/state/qr_code_text", ssm->topic); // config topic
-		msg_id = esp_mqtt_client_publish(client_ssm, topic, "", 0, 2, 0);  // QOS 2, retain 1
+		msg_id = esp_mqtt_client_publish(client_ssm, topic, empty_payload, 0, 2, 0); // QOS 2, retain 1
 		ESP_LOGI(TAG, "sent \"\" for qr_code_text for %s, msg_id=%d", ssm->topic, msg_id);
 		wait_published(msg_id);
 
@@ -938,7 +942,7 @@ void mqtt_subscribe(void) {
 			memset(topic, 0, sizeof(topic));
 			sprintf(topic, "homeassistant/%s/set/lock_position", ssm->topic);	  // command topic
 			if (ssm->is_new) {													  // if just registered, clear the retained message before subscribe
-				msg_id = esp_mqtt_client_publish(client_ssm, topic, "", 0, 0, 1); // QOS 0, retain 1
+				msg_id = esp_mqtt_client_publish(client_ssm, topic, NULL, 0, 0, 1); // QOS 0, retain 1
 				ESP_LOGI(TAG, "clear retained message for %s, msg_id=%d", ssm->topic, msg_id);
 			}
 			msg_id = esp_mqtt_client_subscribe(client_ssm, topic, 2); // QOS 2
@@ -948,7 +952,7 @@ void mqtt_subscribe(void) {
 			memset(topic, 0, sizeof(topic));
 			sprintf(topic, "homeassistant/%s/set/unlock_position", ssm->topic);	  // command topic
 			if (ssm->is_new) {													  // if just registered, clear the retained message before subscribe
-				msg_id = esp_mqtt_client_publish(client_ssm, topic, "", 0, 0, 1); // QOS 0, retain 1
+				msg_id = esp_mqtt_client_publish(client_ssm, topic, NULL, 0, 0, 1); // QOS 0, retain 1
 				ESP_LOGI(TAG, "clear retained message for %s, msg_id=%d", ssm->topic, msg_id);
 			}
 			msg_id = esp_mqtt_client_subscribe(client_ssm, topic, 2); // QOS 2
@@ -957,15 +961,15 @@ void mqtt_subscribe(void) {
 		} else {
 			// set empty default value for add_sesame for Touch
 			memset(topic, 0, sizeof(topic));
-			sprintf(topic, "homeassistant/%s/state/add_sesame", ssm->topic);  // config topic
-			msg_id = esp_mqtt_client_publish(client_ssm, topic, "", 0, 2, 0); // QOS 2, retain 1
+			sprintf(topic, "homeassistant/%s/state/add_sesame", ssm->topic); // config topic
+			msg_id = esp_mqtt_client_publish(client_ssm, topic, empty_payload, 0, 2, 0); // QOS 2, retain 1
 			ESP_LOGI(TAG, "sent \"\" for add_sesame for %s, msg_id=%d", ssm->topic, msg_id);
 			wait_published(msg_id);
 
 			// set empty default value for remove_sesame for Touch
 			memset(topic, 0, sizeof(topic));
 			sprintf(topic, "homeassistant/%s/state/remove_sesame", ssm->topic); // config topic
-			msg_id = esp_mqtt_client_publish(client_ssm, topic, "", 0, 2, 0);	// QOS 2, retain 1
+			msg_id = esp_mqtt_client_publish(client_ssm, topic, empty_payload, 0, 2, 0); // QOS 2, retain 1
 			ESP_LOGI(TAG, "sent \"\" for remove_sesame for %s, msg_id=%d", ssm->topic, msg_id);
 			wait_published(msg_id);
 		}
