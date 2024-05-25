@@ -14,6 +14,8 @@ void esp_ble_gatt_write(sesame * ssm, uint8_t * value, uint16_t length);
 
 void esp_ble_init(void);
 
+void sesame_update(void);
+
 void disconnect(sesame * ssm);
 
 void reconnect(sesame * ssm);

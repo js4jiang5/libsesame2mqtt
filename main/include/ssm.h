@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,6 +70,8 @@ typedef struct {
 	uint8_t id;								 // address offset relative to p_ssms_env.20240510 by JS
 	uint8_t wait_for_status_update_from_ssm; // 20240516 by JS
 	uint8_t is_new;							 // 20240516 by JS
+	uint8_t mqtt_discovery_done;			 // 20240524 by JS
+	uint8_t mqtt_subscribe_done;			 // 20240524 by JS
 } sesame;
 
 typedef void (*ssm_action)(sesame * ssm);
@@ -84,6 +87,11 @@ extern struct ssm_env_tag * p_ssms_env;
 extern uint8_t cnt_ssms;
 extern uint8_t real_num_ssms;
 extern uint8_t cnt_unregistered_ssms;
+extern struct timeval tv_start;
+
+int loop_timeout();
+
+void start_timer();
 
 int ssm_save_nvs(sesame * ssm);
 
@@ -96,8 +104,6 @@ void talk_to_ssm(sesame * ssm, uint8_t parsing_type);
 void ssm_mem_deinit(void);
 
 void ssm_init(ssm_action ssm_action_cb);
-
-int sesame_search_done(void);
 
 void gen_qr_code_txt(sesame * ssm, char * qr);
 

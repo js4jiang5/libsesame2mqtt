@@ -8,10 +8,10 @@ extern "C" {
 #include "mqtt_client.h"
 
 extern int mqtt_init_done;
-extern int mqtt_discovery_done;
 extern int msg_id_subscribed;
 extern char config_broker_url[60];
 extern esp_mqtt_client_handle_t client_ssm;
+
 int wait_published(int msg_id);
 
 int wake_up(sesame * ssm);

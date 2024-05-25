@@ -14,8 +14,7 @@ uint8_t cnt_ssms = 0, cnt_unregistered_ssms = 0, real_num_ssms = 0;
 
 struct ssm_env_tag * p_ssms_env = NULL;
 
-// uint8_t nvs_map[SSM_MAX_NUM];
-// char addr_map[SSM_MAX_NUM][18];
+struct timeval tv_start;
 
 int hex2dec(char hex_letter) {
 	int v = 0;
@@ -139,6 +138,17 @@ void gen_qr_code_txt(sesame * ssm, char * qr) {
 	}
 }
 
+void start_timer(void) {
+	gettimeofday(&tv_start, NULL); // loop start timer
+}
+
+int loop_timeout(void) {
+	struct timeval tv_now;
+	gettimeofday(&tv_now, NULL); // get current time
+	int diff = tv_now.tv_sec - tv_start.tv_sec;
+	return ((diff > CONFIG_ESP_TASK_WDT_TIMEOUT_S - 3 || diff < 0)); // timeout 3 secs later or time variable wrap around
+}
+
 int wait_for_status_update(sesame * ssm, uint8_t timeout_s) {
 	uint8_t n_max = timeout_s * 10;
 	int succeed = 0;
@@ -151,24 +161,14 @@ int wait_for_status_update(sesame * ssm, uint8_t timeout_s) {
 			ssm->wait_for_status_update_from_ssm = 0; // timeout, force wait status to 0
 			ESP_LOGW(TAG, "%s wait status timeout", SSM_PRODUCT_TYPE_STR(ssm->product_type));
 		} else {
+			//if (loop_timeout()) {
+			//	ssm->wait_for_status_update_from_ssm = 0; // timeout, force wait status to 0
+			//	break;
+			//}
 			vTaskDelay(100 / portTICK_PERIOD_MS);
 		}
 	}
 	return succeed;
-}
-
-int sesame_search_done(void) {
-	int search_done = (cnt_ssms > 0) ? 1 : 0;
-	int TH = 8;
-	if (cnt_ssms < real_num_ssms) {
-		for (int n = 0; n < cnt_ssms; n++) { // if all discovered devices have been discovered at least TH times, search is done
-			if ((p_ssms_env + n)->ssm.cnt_discovery < TH) {
-				search_done = 0;
-				break;
-			}
-		}
-	}
-	return search_done;
 }
 
 int ssm_read_nvs(sesame * ssm) {
@@ -210,7 +210,6 @@ int ssm_read_nvs(sesame * ssm) {
 			}
 		}
 	}
-
 	// NVS close
 	nvs_close(my_handle);
 
@@ -304,13 +303,9 @@ static void ssm_parse_publish(sesame * ssm, uint8_t cmd_it_code) {
 		ESP_LOGI(TAG, "is_low_battery = %d", ssm->mech_status.is_low_battery);
 		ESP_LOGI(TAG, "is_clockwise = %d", ssm->mech_status.is_clockwise);
 		device_status_t lockStatus = ssm->mech_status.is_lock_range ? SSM_LOCKED : (ssm->mech_status.is_unlock_range ? SSM_UNLOCKED : SSM_MOVED);
-		// if (ssm->device_status != lockStatus) {
 		ssm->device_status = lockStatus;
 		ssm->wait_for_status_update_from_ssm = 0;
-		if (sesame_search_done()) {
-			(p_ssms_env + ssm->conn_id - 1)->ssm_cb__(ssm); // callback: ssm_action_handle
-		}
-		// }
+		p_ssms_env->ssm_cb__(ssm); // callback: ssm_action_handle
 		break;
 	default:
 		break;
@@ -443,6 +438,8 @@ void ssm_init(ssm_action ssm_action_cb) {
 		(p_ssms_env + n)->ssm.cnt_discovery = 0;				   // 20240510 add by JS
 		(p_ssms_env + n)->ssm.wait_for_status_update_from_ssm = 0; // 20240510 add by JS
 		(p_ssms_env + n)->ssm.is_new = 0;						   // 20240516 add by JS
+		(p_ssms_env + n)->ssm.mqtt_discovery_done = 0;			   // 20240524 add by JS
+		(p_ssms_env + n)->ssm.mqtt_subscribe_done = 0;			   // 20240524 add by JS
 		memset((p_ssms_env + n)->ssm.topic, 0, sizeof((p_ssms_env + n)->ssm.topic));
 	}
 	ESP_LOGI(TAG, "[ssms_init][SUCCESS]");
