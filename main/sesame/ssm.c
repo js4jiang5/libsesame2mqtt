@@ -10,6 +10,10 @@ static const char * TAG = "ssm.c";
 
 static uint8_t additional_data[] = { 0x00 };
 
+static double battery_vol[] = {5.85, 5.82, 5.79, 5.76, 5.73, 5.70, 5.65, 5.60, 5.55, 5.50, 5.40, 5.20, 5.10, 5.0, 4.8, 4.6}; // 20240526 by JS
+
+static double battery_pct[] = {100.0, 95.0, 90.0, 85.0, 80.0, 70.0, 60.0, 50.0, 40.0, 32.0, 21.0, 13.0, 10.0, 7.0, 3.0, 0.0}; // 20240526 by JS
+
 uint8_t cnt_ssms = 0, cnt_unregistered_ssms = 0, real_num_ssms = 0;
 
 struct ssm_env_tag * p_ssms_env = NULL;
@@ -305,6 +309,16 @@ static void ssm_parse_publish(sesame * ssm, uint8_t cmd_it_code) {
 		device_status_t lockStatus = ssm->mech_status.is_lock_range ? SSM_LOCKED : (ssm->mech_status.is_unlock_range ? SSM_UNLOCKED : SSM_MOVED);
 		ssm->device_status = lockStatus;
 		ssm->wait_for_status_update_from_ssm = 0;
+		// calculate battery percentage from voltage
+		ssm->battery_percentage = 0.;
+		double voltage = ssm->mech_status.battery * 2/1000.;
+		for (int i_bat = 0; i_bat < 16; i_bat++) {
+			if (voltage > battery_vol[i_bat]) {
+				ssm->battery_percentage = battery_pct[i_bat];
+				break;
+			}
+		}
+
 		p_ssms_env->ssm_cb__(ssm); // callback: ssm_action_handle
 		break;
 	default:

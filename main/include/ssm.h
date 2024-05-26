@@ -72,6 +72,7 @@ typedef struct {
 	uint8_t is_new;							 // 20240516 by JS
 	uint8_t mqtt_discovery_done;			 // 20240524 by JS
 	uint8_t mqtt_subscribe_done;			 // 20240524 by JS
+	double battery_percentage;				 // 20240526 by JS
 } sesame;
 
 typedef void (*ssm_action)(sesame * ssm);
