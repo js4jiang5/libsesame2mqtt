@@ -4,6 +4,7 @@
 
 ## 多語言版本
 - [English version](README_EN.md)
+- [日本語版](README_JP.md)
 
 ## 新增功能
 相較於官方原始的展示版，除了基本的上鎖解鎖功能外，此專案新增功能如下

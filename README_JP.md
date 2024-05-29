@@ -1,32 +1,17 @@
-![img](./doc/resources/SesameSDK_20231201.png)
-# ESP32-C3-DevKitM-1によるセサミ5の操作例
-
-このプロジェクトでは、ESP32-C3-DevKitM-1マイクロコントローラを使用してセサミ5スマートロックを登録および操作する方法を示します。この例では、ESP-IDF開発フレームワークとBLE技術を利用して、近くのセサミ5デバイスを自動的に探索し、接続して登録します。ESP32-C3-DevKitM-1がセサミ5が解錠位置に達したことを検出すると、自動的にロックするコマンドを発行します。
+# 緣起
+[libsesame2mqtt](https://github.com/js4jiang5/libsesame2mqtt) このプロジェクトは [SesameSDK_ESP32_with_DemoApp](https://github.com/CANDY-HOUSE/SesameSDK_ESP32_with_DemoApp) のフォークです。
+[SesameSDK_ESP32_with_DemoApp](https://github.com/CANDY-HOUSE/SesameSDK_ESP32_with_DemoApp) はCANDY HOUSE公式によってリリースされた、ESP32開発者向けのSDKですが、その主な目的はデモンストレーションであり、機能は完全ではありません。[libsesame2mqtt](https://github.com/js4jiang5/libsesame2mqtt)  はその不足を補うために生まれ、Sesame 5/ 5 Pro/ Touch/ Touch Pro の制御とモニタリングに完全な機能を提供します。その主な目的は、別のプロジェクト[Sesame2MQTT](https://github.com/js4jiang5/Sesame2MQTT) のライブラリとして機能することです。[Sesame2MQTT](https://github.com/js4jiang5/Sesame2MQTT) プロジェクトはESPHomeの外部コンポーネントであり、ユーザーが Home Assistant プラットフォームに簡単に統合できるようにします。
 
 ## 多言語バージョン
 - [繁體中文版](README.md)
 - [English version](README_EN.md)
 
-## 前提条件
-ESP-IDFをインストールする必要があります。これは、ESP-IDFの`install.sh`スクリプトを使用して必要なツールチェーンと依存関係をインストールすることで行えます。
-
-## インストールと環境設定
-1. ESP-IDFの`install.sh`を通じてツールチェーンがインストールされていることを確認してください。
-2. ターミナルを開いて、ESP-IDFのパスに移動し、`export.sh`を実行して環境変数に追加します。
-3. ESP32-C3-DevKitM-1をUSBでコンピュータに接続します。
-4. プロジェクトフォルダに戻り、`idf.py flash`を実行してコンパイルとフラッシュを行います。
-
-## 使用方法
-ESP32-C3-DevKitM-1にファームウェアを焼いて再起動した後、近くの未登録のSesameデバイスを自動的に検索します。接続して登録した後、ESP32-C3-DevKitM-1はSesame5の状態を監視し、適切なタイミングでロックコマンドを発行します。
-
-## 特徴と機能
-
-- **自動デバイス探索**: 近くのセサミ5スマートロックを自動的に探索して接続します。
-- **自動ロック**: セサミ5が予定の解錠位置に達したときに、ESP32-C3-DevKitM-1が自動的にロック指令を発行します。
-
-## ソースコードの参照
-
-この例は、ESP-IDF内のnimble BLE Central Exampleを基に改良されました。
+## 新機能
+公式のデモ版と比較して、基本的な施錠・解錠機能に加えて、このプロジェクトには以下の新機能が追加されました。
+- Sesame 5/5 Pro の水平調整、施錠/解錠の角度設定、バッテリー残量と現在位置の表示。
+- Sesame Touch/Touch Pro のバッテリー残量表示と更新、Sesame 5/5 Pro とのペアリング/ペアリング解除。
+- QRコードの生成。スマートフォンの Sesame APP でQRコードをスキャンすると、デバイスを追加でき、スマートフォンコントロールの愛好家にとって便利です。
+- WiFiステーションとMQTTクライアントの追加。ESP32の開発者は、MQTTを介して Home Assistant と通信する媒体として使用できます。さらに、MQTTディスカバリーにより、Home Assistant は自動的にすべての Sesame 5/ 5 Pro/ Touch/ Touch Pro デバイスを検出できます。
 
 ## 追加リソース
 

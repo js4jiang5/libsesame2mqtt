@@ -1,30 +1,17 @@
-![img](./doc/resources/SesameSDK_20231201.png)
-# ESP32-C3-DevKitM-1 Sesame5 Switch Control Example
-
-This project demonstrates how to use the ESP32-C3-DevKitM-1 microcontroller to register and control a Sesame5 smart lock. Utilizing the ESP-IDF development framework and BLE technology, this example automatically searches for, connects to, and registers nearby Sesame5 devices. When the ESP32-C3-DevKitM-1 detects that the Sesame5 is in the unlock position, it issues a command to automatically lock it.
+# Story
+The [libsesame2mqtt](https://github.com/js4jiang5/libsesame2mqtt) project is a fork of [SesameSDK_ESP32_with_DemoApp](https://github.com/CANDY-HOUSE/SesameSDK_ESP32_with_DemoApp).
+[SesameSDK_ESP32_with_DemoApp](https://github.com/CANDY-HOUSE/SesameSDK_ESP32_with_DemoApp) is an SDK released by CANDY HOUSE officially for ESP32 developers. However, its main purpose is demonstration, and its functionality is not complete. [libsesame2mqtt](https://github.com/js4jiang5/libsesame2mqtt) was created to fill these gaps, providing full control and monitoring capabilities for Sesame 5/ 5 Pro/ Touch/ Touch Pro. Its primary purpose is to serve as a library for another project, [Sesame2MQTT](https://github.com/js4jiang5/Sesame2MQTT). The [Sesame2MQTT](https://github.com/js4jiang5/Sesame2MQTT) project is an external component of ESPHome, allowing users to easily integrate into the Home Assistant platform.
 
 ## Other Languages
 - [返回中文版](README.md)
 - [日本語版](README_JP.md)
 
-## Prerequisites
-You will need to install ESP-IDF, which can be done using the `install.sh` script from the ESP-IDF to install necessary toolchains and dependencies.
-
-## Installation and Environment Setup
-1. Ensure that you have installed the toolchain through ESP-IDF's `install.sh`.
-2. Open a terminal, navigate to the ESP-IDF path, and run `export.sh` to add it to your environment variables.
-3. Connect your ESP32-C3-DevKitM-1 to your computer via USB.
-4. Return to the project folder and run `idf.py flash` to compile and flash.
-
-## Usage
-After flashing and rebooting the ESP32-C3-DevKitM-1, it will automatically search for unregistered Sesame devices nearby. Once connected and registered, the ESP32-C3-DevKitM-1 will monitor the status of the Sesame5 and issue a lock command at the appropriate time.
-
-## Features and Functionality
-- **Automatic Device Discovery**: Automatically searches for and connects to nearby Sesame5 smart locks.
-- **Automatic Locking**: Issues a lock command when the Sesame5 reaches the preset unlock position.
-
-## Source Reference
-This example is modified from the nimble BLE Central Example within ESP-IDF.
+## New Functions
+Compared to the official original demonstration version, this project has added the following features in addition to the basic locking and unlocking functionality:
+- Horizontal calibration for Sesame 5/5 Pro, lock/unlock angle settings, battery level, and current position display.
+- Battery level display and update for Sesame Touch/Touch Pro, pairing/unpairing with Sesame 5/5 Pro.
+- Generation of QR code. Scanning the QR code with the Sesame APP on a smartphone allows the addition of devices, which is convenient for smartphone control enthusiasts.
+- Addition of WiFi station and MQTT client. Developers using ESP32 can use MQTT as a medium to communicate with Home Assistant. Furthermore, MQTT discovery allows Home Assistant to automatically detect all Sesame 5/ 5 Pro/ Touch/ Touch Pro devices.
 
 ## Additional Resources
 - Visit the [CANDY HOUSE Official Website](https://jp.candyhouse.co/) for more information about the Sesame5 smart lock.
