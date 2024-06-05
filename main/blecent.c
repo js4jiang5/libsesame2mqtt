@@ -52,6 +52,7 @@ static void service_disc_complete(const struct peer * peer, int status, void * a
 static int ble_gap_event_connect_handle(struct ble_gap_event * event, sesame * ssm) {
 	if (event->connect.status != 0) {
 		ESP_LOGE(TAG, "Error: Connection failed; status=%d\n", event->connect.status);
+		ble_hs_cfg.sync_cb(); // resume BLE scan
 		return ESP_FAIL;
 	}
 	static struct ble_gap_conn_desc desc;
@@ -61,6 +62,7 @@ static int ble_gap_event_connect_handle(struct ble_gap_event * event, sesame * s
 	rc = peer_add(event->connect.conn_handle);
 	if (rc != 0) {
 		ESP_LOGE(TAG, "Failed to add peer for %s with conn_id = %d; rc=%d\n", SSM_PRODUCT_TYPE_STR(ssm->product_type), event->connect.conn_handle, rc);
+		ble_hs_cfg.sync_cb(); // resume BLE scan
 		return ESP_FAIL;
 	}
 	ssm->device_status = SSM_CONNECTED;		   // set the device status
@@ -162,9 +164,6 @@ static void ssm_scan_connect(const struct ble_hs_adv_fields * fields, void * dis
 	ble_addr_t * addr = &((struct ble_gap_disc_desc *) disc)->addr;
 	int8_t rssi = ((struct ble_gap_disc_desc *) disc)->rssi;
 	struct ssm_env_tag * p_tag = NULL;
-	// if (((struct ble_gap_disc_desc *) disc)->rssi < -60) { // RSSI threshold
-	//     return;
-	// }
 
 	if (timer_1min()) { // 1 min timeout, check RSSI
 		char topic[80] = "";
@@ -209,6 +208,9 @@ static void ssm_scan_connect(const struct ble_hs_adv_fields * fields, void * dis
 				return;
 			}
 		}
+		if (((struct ble_gap_disc_desc *) disc)->rssi < -95) { // RSSI threshold
+			return;
+		}
 		p_tag = p_ssms_env + cnt_ssms;
 		p_tag->ssm.rssi = rssi;
 		memcpy(p_tag->ssm.addr, addr->val, 6);
@@ -244,6 +246,7 @@ static void ssm_scan_connect(const struct ble_hs_adv_fields * fields, void * dis
 		int rc = ble_gap_connect(BLE_OWN_ADDR_PUBLIC, addr, 30000, NULL, ble_gap_connect_event, &p_tag->ssm);
 		if (rc != 0) {
 			ESP_LOGE(TAG, "Error: Failed to connect to device; rc=%d\n", rc);
+			ble_hs_cfg.sync_cb(); // resume BLE scan
 			return;
 		}
 	} else {
