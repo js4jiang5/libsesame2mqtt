@@ -18,7 +18,7 @@ uint8_t cnt_ssms = 0, cnt_unregistered_ssms = 0, real_num_ssms = 0;
 
 struct ssm_env_tag * p_ssms_env = NULL;
 
-struct timeval tv_start;
+struct timeval tv_start, tv_1min;
 
 int hex2dec(char hex_letter) {
 	int v = 0;
@@ -142,6 +142,18 @@ void gen_qr_code_txt(sesame * ssm, char * qr) {
 	}
 }
 
+int timer_1min(void) {
+	struct timeval tv_now;
+	gettimeofday(&tv_now, NULL); // get current time
+	int diff = tv_now.tv_sec - tv_1min.tv_sec;
+	if (diff >= 60) {
+		gettimeofday(&tv_1min, NULL); // restart timer
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
 void start_timer(void) {
 	gettimeofday(&tv_start, NULL); // loop start timer
 }
@@ -157,18 +169,13 @@ int wait_for_status_update(sesame * ssm, uint8_t timeout_s) {
 	uint8_t n_max = timeout_s * 10;
 	int succeed = 0;
 	for (int n = 0; n < n_max; n++) {
-		if (ssm->wait_for_status_update_from_ssm == 0) {
+		if (ssm->update_status) {
 			ESP_LOGI(TAG, "%s received status update", SSM_PRODUCT_TYPE_STR(ssm->product_type));
 			succeed = 1;
 			break;
-		} else if (n == n_max - 1) {				  // timeout
-			ssm->wait_for_status_update_from_ssm = 0; // timeout, force wait status to 0
+		} else if (n == n_max - 1) { // timeout
 			ESP_LOGW(TAG, "%s wait status timeout", SSM_PRODUCT_TYPE_STR(ssm->product_type));
 		} else {
-			//if (loop_timeout()) {
-			//	ssm->wait_for_status_update_from_ssm = 0; // timeout, force wait status to 0
-			//	break;
-			//}
 			vTaskDelay(100 / portTICK_PERIOD_MS);
 		}
 	}
@@ -308,7 +315,8 @@ static void ssm_parse_publish(sesame * ssm, uint8_t cmd_it_code) {
 		ESP_LOGI(TAG, "is_clockwise = %d", ssm->mech_status.is_clockwise);
 		device_status_t lockStatus = ssm->mech_status.is_lock_range ? SSM_LOCKED : (ssm->mech_status.is_unlock_range ? SSM_UNLOCKED : SSM_MOVED);
 		ssm->device_status = lockStatus;
-		ssm->wait_for_status_update_from_ssm = 0;
+		ssm->update_status = 1;
+
 		// calculate battery percentage from voltage
 		ssm->battery_percentage = 0.;
 		double voltage = ssm->mech_status.battery * 2/1000.;
@@ -368,6 +376,7 @@ static void ssm_parse_response(sesame * ssm, uint8_t cmd_it_code) {
 }
 
 void ssm_ble_receiver(sesame * ssm, const uint8_t * p_data, uint16_t len) {
+	ssm->update_status = 0;
 	if (p_data[0] & 1u) {
 		ssm->c_offset = 0;
 	}
@@ -450,10 +459,14 @@ void ssm_init(ssm_action ssm_action_cb) {
 		(p_ssms_env + n)->ssm.add_card = 0;						   // 20240508 add by JS
 		(p_ssms_env + n)->ssm.add_finger = 0;					   // 20240508 add by JS
 		(p_ssms_env + n)->ssm.cnt_discovery = 0;				   // 20240510 add by JS
-		(p_ssms_env + n)->ssm.wait_for_status_update_from_ssm = 0; // 20240510 add by JS
 		(p_ssms_env + n)->ssm.is_new = 0;						   // 20240516 add by JS
 		(p_ssms_env + n)->ssm.mqtt_discovery_done = 0;			   // 20240524 add by JS
 		(p_ssms_env + n)->ssm.mqtt_subscribe_done = 0;			   // 20240524 add by JS
+		(p_ssms_env + n)->ssm.disconnect_forever = 0;			   // 20240605 add by JS
+		(p_ssms_env + n)->ssm.update_status = 0;				   // 20240605 add by JS
+		(p_ssms_env + n)->ssm.rssi = 0;			   				   // 20240605 add by JS
+		(p_ssms_env + n)->ssm.is_alive = 0;						   // 20240605 add by JS
+		(p_ssms_env + n)->ssm.rssi_changed = 0;					   // 20240605 add by JS
 		memset((p_ssms_env + n)->ssm.topic, 0, sizeof((p_ssms_env + n)->ssm.topic));
 	}
 	ESP_LOGI(TAG, "[ssms_init][SUCCESS]");

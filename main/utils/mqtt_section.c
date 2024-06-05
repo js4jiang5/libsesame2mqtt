@@ -88,22 +88,9 @@ int wait_published(int msg_id) {
 }
 
 int wake_up(sesame * ssm) {
-	int succeed = 0;
-	for (int n = 0; n < 2; n++) { // try at most 2 times
-		// disconnect and reconnect to login and update status
-		disconnect(ssm);
-		ble_gap_disc_cancel(); 
-		ssm->wait_for_status_update_from_ssm = 1;
-		reconnect(ssm);
-		if (wait_for_status_update(ssm, 5)) {
-			succeed = 1;
-			break;
-		}
-		if (loop_timeout()) {
-			break;
-		}
-	}
-	return succeed;
+	ssm->update_status = 0;
+	reconnect(ssm);
+	return wait_for_status_update(ssm, 10);
 }
 
 /*
@@ -244,9 +231,6 @@ static void mqtt_event_handler(void * handler_args, esp_event_base_t base, int32
 						// ESP_LOGI(TAG, "sent \"\" for add_sesame for %s, msg_id=%d", ssm->topic, msg_id);
 						// wait_published(msg_id);
 					}
-					if (cnt_ssms < real_num_ssms) {
-						ble_hs_cfg.sync_cb(); // if search is not done yet, restart BLE scan, bls_hs_cfg.sync_cb callback function is blecent_scan, which invoke ble_gap_disc()
-					}
 				}
 				disconnect(tch);
 				return;
@@ -277,9 +261,6 @@ static void mqtt_event_handler(void * handler_args, esp_event_base_t base, int32
 						// msg_id = esp_mqtt_client_publish(client_ssm, topic, empty_payload, 0, 2, 0); // QOS 2, retain 1
 						// ESP_LOGI(TAG, "sent \"\" for remove_sesame for %s, msg_id=%d", ssm->topic, msg_id);
 						// wait_published(msg_id);
-					}
-					if (cnt_ssms < real_num_ssms) {
-						ble_hs_cfg.sync_cb(); // if search is not done yet, restart BLE scan, bls_hs_cfg.sync_cb callback function is blecent_scan, which invoke ble_gap_disc()
 					}
 				}
 				disconnect(tch);
@@ -353,9 +334,6 @@ static void mqtt_event_handler(void * handler_args, esp_event_base_t base, int32
 					ESP_LOGW(TAG, "touch battery update fail");
 				}
 				disconnect(tch);
-				if (cnt_ssms < real_num_ssms) {
-					ble_hs_cfg.sync_cb(); // if search is not done yet, restart BLE scan, bls_hs_cfg.sync_cb callback function is blecent_scan, which invoke ble_gap_disc()
-				}
 				return;
 			}
 		}
@@ -913,6 +891,33 @@ void mqtt_discovery(void) {
 			ESP_LOGI(TAG, "sent mqtt battery update config for %s, msg_id=%d", ssm->topic, msg_id);
 			wait_published(msg_id);
 		}
+
+		// config sensor SSM RSSI
+		memset(topic, 0, sizeof(topic));
+		sprintf(topic, "homeassistant/%s", ssm->topic); // base topic
+		memset(payload, 0, sizeof(payload));
+		cnt = 0;
+		cnt += sprintf(payload + cnt, "{\n");
+		cnt += sprintf(payload + cnt, "\"~\": \"%s\",\n", topic);
+		cnt += sprintf(payload + cnt, "\"name\": \"RSSI\",\n");
+		cnt += sprintf(payload + cnt, "\"uniq_id\": \"%s_rssi\",\n", ssm->topic);
+		cnt += sprintf(payload + cnt, "\"stat_t\": \"~/state/rssi\",\n");
+		//cnt += sprintf(payload + cnt, "\"value_template\": \"{{ value_json.battery }}\",\n");
+		cnt += sprintf(payload + cnt, "\"unit_of_measurement\": \"dBm\",\n");
+		cnt += sprintf(payload + cnt, "\"dev\": {\n");
+		// cnt += sprintf(payload + cnt, "\"ids\": \"%s\",\n", secret);
+		cnt += sprintf(payload + cnt, "\"connections\": [[\"mac\", \"%s\"]],\n", mac_addr);
+		cnt += sprintf(payload + cnt, "\"mf\": \"Candy House\",\n");
+		cnt += sprintf(payload + cnt, "\"name\": \"%s\",\n", SSM_PRODUCT_TYPE_STR(ssm->product_type));
+		cnt += sprintf(payload + cnt, "\"mdl\": \"%s\"\n", SSM_PRODUCT_TYPE_STR(ssm->product_type));
+		cnt += sprintf(payload + cnt, "}\n");
+		cnt += sprintf(payload + cnt, "}");
+		memset(topic, 0, sizeof(topic));
+		sprintf(topic, "homeassistant/sensor/%s_rssi/config", ssm->topic);  // config topic
+		msg_id = esp_mqtt_client_publish(client_ssm, topic, payload, 0, 2, 1); // QOS 2, retain 1
+		ESP_LOGI(TAG, "sent mqtt rssi config for %s, msg_id=%d", ssm->topic, msg_id);
+		wait_published(msg_id); 
+
 		ssm->mqtt_discovery_done = 1;
 		ESP_LOGI(TAG, "%s MQTT discovery done.", SSM_PRODUCT_TYPE_STR(ssm->product_type));
 	}
@@ -996,11 +1001,6 @@ void mqtt_subscribe(void) {
 		}
 		ssm->mqtt_subscribe_done = 1;
 		ESP_LOGI(TAG, "%s MQTT subscribe done.", SSM_PRODUCT_TYPE_STR(ssm->product_type));
-
-		// continue to search for the next sesame
-		if (n == cnt_ssms - 1 && cnt_ssms < real_num_ssms) { // if specified number of ssms have been found, stop search
-			ble_hs_cfg.sync_cb(); // if search is not done yet, restart BLE scan, bls_hs_cfg.sync_cb callback function is blecent_scan, which invoke ble_gap_disc()
-		}
 	}
 }
 

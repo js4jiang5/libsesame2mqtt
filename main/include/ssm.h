@@ -68,11 +68,15 @@ typedef struct {
 	uint8_t add_card;						 // 20240508 add by JS
 	uint8_t add_finger;						 // 20240508 add by JS
 	uint8_t id;								 // address offset relative to p_ssms_env.20240510 by JS
-	uint8_t wait_for_status_update_from_ssm; // 20240516 by JS
 	uint8_t is_new;							 // 20240516 by JS
 	uint8_t mqtt_discovery_done;			 // 20240524 by JS
 	uint8_t mqtt_subscribe_done;			 // 20240524 by JS
 	double battery_percentage;				 // 20240526 by JS
+	uint8_t disconnect_forever;				 // 20240605 by JS
+	uint8_t update_status;				 	 // 20240605 by JS
+	int8_t rssi;							 // 20240604 by JS
+	uint8_t is_alive;						 // 20240605 by JS
+	uint8_t rssi_changed;					 // 20240605 by JS
 } sesame;
 
 typedef void (*ssm_action)(sesame * ssm);
@@ -88,7 +92,9 @@ extern struct ssm_env_tag * p_ssms_env;
 extern uint8_t cnt_ssms;
 extern uint8_t real_num_ssms;
 extern uint8_t cnt_unregistered_ssms;
-extern struct timeval tv_start;
+extern struct timeval tv_start, tv_1min;
+
+int timer_1min(); // timer for 1 minute
 
 int loop_timeout();
 

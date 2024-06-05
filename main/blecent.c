@@ -86,15 +86,20 @@ static void reconnect_ssm(sesame * ssm) {
 }
 
 void disconnect(sesame * ssm) {
-	if (ssm->device_status >= SSM_DISCONNECTED) { // disconnect if is connected
+	if (ssm->device_status > SSM_DISCONNECTED) { // disconnect if is connected
+		ssm->disconnect_forever = 1;
 		ble_gap_terminate(ssm->conn_id, BLE_ERR_REM_USER_CONN_TERM); /* Terminate the connection. */
-		vTaskDelay(600 / portTICK_PERIOD_MS);
+		//vTaskDelay(600 / portTICK_PERIOD_MS);
 	}
 }
 
 void reconnect(sesame * ssm) {
 	if (ssm->device_status <= SSM_DISCONNECTED) { // reconnect if is disconnected
+		ble_gap_disc_cancel(); // stop BLE scan, added on 2024.06.15 by JS
 		reconnect_ssm(ssm);
+	} else { // disconnect to trigger reconnect automatically
+		ble_gap_terminate(ssm->conn_id, BLE_ERR_REM_USER_CONN_TERM); /* Terminate the connection. */
+		//vTaskDelay(600 / portTICK_PERIOD_MS);
 	}
 }
 
@@ -111,14 +116,16 @@ static int ble_gap_connect_event(struct ble_gap_event * event, void * arg) {
 		ssm->conn_id = 0xFF;
 		print_conn_desc(&event->disconnect.conn);
 		peer_delete(event->disconnect.conn.conn_handle);		
-		if (event->disconnect.reason != 534) { // if the disconnect is not done by local host
-			if (event->disconnect.reason == 531) { // Sesame teminate the connection. Should be caused by device reset
-				esp_restart();
-			}
-			ble_gap_disc_cancel(); // stop BLE scan, added on 2024.04.17 by JS
-			vTaskDelay(600 / portTICK_PERIOD_MS);
-			reconnect_ssm(ssm);
+		if (ssm->disconnect_forever) {
+			ssm->disconnect_forever = 0;
+			return ESP_OK;
 		}
+		if (event->disconnect.reason == 531) { // Sesame teminate the connection. Should be caused by device reset
+			esp_restart();
+		}
+		ble_gap_disc_cancel(); // stop BLE scan, added on 2024.04.17 by JS
+		vTaskDelay(600 / portTICK_PERIOD_MS);
+		reconnect_ssm(ssm);
 		return ESP_OK;
 
 	case BLE_GAP_EVENT_CONN_UPDATE_REQ:
@@ -128,8 +135,22 @@ static int ble_gap_connect_event(struct ble_gap_event * event, void * arg) {
 		*event->conn_update_req.self_params = *event->conn_update_req.peer_params;
 		return ESP_OK;
 
+	case BLE_GAP_EVENT_CONN_UPDATE:
+		ESP_LOGI(TAG, "connect update success");
+		return ESP_OK;
+
 	case BLE_GAP_EVENT_NOTIFY_RX:
 		ssm_ble_receiver(ssm, event->notify_rx.om->om_data, event->notify_rx.om->om_len);
+		if (ssm->update_status) {
+			sesame_update();
+			mqtt_discovery();
+			mqtt_subscribe();
+		}
+		ble_hs_cfg.sync_cb(); // resume BLE scan
+		return ESP_OK;
+
+	case BLE_GAP_EVENT_DISC_COMPLETE:
+		ESP_LOGW(TAG, "BLE_GAP_EVENT_DISC_COMPLETE");
 		return ESP_OK;
 
 	default:
@@ -139,20 +160,57 @@ static int ble_gap_connect_event(struct ble_gap_event * event, void * arg) {
 
 static void ssm_scan_connect(const struct ble_hs_adv_fields * fields, void * disc) {
 	ble_addr_t * addr = &((struct ble_gap_disc_desc *) disc)->addr;
+	int8_t rssi = ((struct ble_gap_disc_desc *) disc)->rssi;
 	struct ssm_env_tag * p_tag = NULL;
 	// if (((struct ble_gap_disc_desc *) disc)->rssi < -60) { // RSSI threshold
 	//     return;
 	// }
-	if (fields->mfg_data_len >= 5 && fields->mfg_data[0] == 0x5A && fields->mfg_data[1] == 0x05) { // is SSM
-		for (int n = 0; n < cnt_ssms; n++) {													   // skip if the device was discovered already
-			if (memcmp((p_ssms_env + n)->ssm.addr, addr->val, sizeof(uint8_t) * 6) == 0) {
-				if (++(p_ssms_env + n)->ssm.cnt_discovery > 128) { // accumulate the number of times this device has been discovered
-					(p_ssms_env + n)->ssm.cnt_discovery = 128;	   // avoid saturation and wrap around
+
+	if (timer_1min()) { // 1 min timeout, check RSSI
+		char topic[80] = "";
+		char payload[8] = "";
+		for (int i_ssm = 0; i_ssm < cnt_ssms; i_ssm++) {
+			sesame *ssm = &(p_ssms_env + i_ssm)->ssm;
+			memset(topic, 0, sizeof(topic));
+			sprintf(topic, "homeassistant/%s/state/rssi", ssm->topic); 
+			if (ssm->is_alive) { // MQTT publish RSSI if value is changed
+				if (ssm->rssi_changed) { 
+					memset(payload, 0, sizeof(payload));
+					sprintf(payload, "%d", ssm->rssi);
+					int msg_id = esp_mqtt_client_publish(client_ssm, topic, payload, 0, 2, 1); // QOS 2, retain 0
+					ESP_LOGI(TAG, "sent mqtt rssi for %s, msg_id=%d", ssm->topic, msg_id);
+					wait_published(msg_id);
 				}
+			} else {
+				if (ssm->rssi != -128) { // MQTT publish RSSI not available if never published
+					ssm->rssi = -128;
+					int msg_id = esp_mqtt_client_publish(client_ssm, topic, "None", 0, 2, 1); // QOS 2, retain 0
+					ESP_LOGI(TAG, "sent mqtt rssi not available for %s, msg_id=%d", ssm->topic, msg_id);
+					wait_published(msg_id);
+				}
+			}
+			ssm->is_alive = 0; // reset
+			ssm->rssi_changed = 0;
+		}
+	}
+
+	if (fields->mfg_data_len >= 5 && fields->mfg_data[0] == 0x5A && fields->mfg_data[1] == 0x05) { // is SSM
+		for (int n = 0; n < cnt_ssms; n++) {
+			sesame *ssm = &(p_ssms_env + n)->ssm;													   // skip if the device was discovered already
+			if (memcmp(ssm->addr, addr->val, sizeof(uint8_t) * 6) == 0) {
+				if (++ssm->cnt_discovery > 128) { // accumulate the number of times this device has been discovered
+					ssm->cnt_discovery = 128;	   // avoid saturation and wrap around
+				}
+				if (!ssm->rssi_changed && rssi != ssm->rssi) {
+					ssm->rssi_changed = 1;
+				}
+				ssm->rssi = rssi;
+				ssm->is_alive = 1;
 				return;
 			}
 		}
 		p_tag = p_ssms_env + cnt_ssms;
+		p_tag->ssm.rssi = rssi;
 		memcpy(p_tag->ssm.addr, addr->val, 6);
 		if (fields->mfg_data[2] == 5) { // Sesame Lock
 			p_tag->ssm.product_type = SESAME_5;
@@ -205,14 +263,18 @@ static int ble_gap_disc_event(struct ble_gap_event * event, void * arg) {
 }
 
 static void blecent_scan(void) {
+	if (ble_gap_disc_active()) { // blecent scan is ongoing
+		return;
+	}
 	ESP_LOGI(TAG, "[blecent_scan][START]");
 	struct ble_gap_disc_params disc_params;
-	disc_params.filter_duplicates = 1;
+	disc_params.filter_duplicates = 0;
 	disc_params.passive = 1;
 	disc_params.itvl = 0;
 	disc_params.window = 0;
 	disc_params.filter_policy = 0;
 	disc_params.limited = 0;
+
 	int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &disc_params, ble_gap_disc_event, NULL);
 	if (rc != 0) {
 		ESP_LOGE(TAG, "Error initiating GAP discovery procedure; rc=0x%x\n", rc);
@@ -253,17 +315,6 @@ void esp_ble_init(void) {
 }
 
 void sesame_update(void) {
-	for (int i_ssm = 0; i_ssm < cnt_ssms; i_ssm++) {
-		if ((p_ssms_env + i_ssm)->ssm.wait_for_status_update_from_ssm == 0) { // no need of waiting status update
-			continue;
-		}
-		wait_for_status_update(&(p_ssms_env + i_ssm)->ssm, 5); // wait status update for at most 5 seconds
-		//if (loop_timeout()) {									// stop current search
-		//	ESP_LOGW(TAG, "loop timeout during wait_for_status_update");
-		//	return;
-		//}
-	}
-
 	if (cnt_ssms == 2 && cnt_unregistered_ssms > 0) { // automaticly add sesame for touch if there are only 2 sesame devices and at least one of them is newly registered
 		sesame *ssm1 = &p_ssms_env->ssm, *ssm2 = &(p_ssms_env + 1)->ssm;
 		sesame *tch = NULL, *ssm = NULL;

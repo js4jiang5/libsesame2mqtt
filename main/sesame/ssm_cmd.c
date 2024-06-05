@@ -62,7 +62,6 @@ void send_login_cmd_to_ssm(sesame * ssm) {
 		cnt_ssms++; // found one more controllable SSM device
 		ESP_LOGW(TAG, "cnt_ssms = %d, cnt_unregistered_ssms = %d", cnt_ssms, cnt_unregistered_ssms);
 	}
-	ssm->wait_for_status_update_from_ssm = 1; // start waiting for status update
 }
 
 void send_read_history_cmd_to_ssm(sesame * ssm) {
