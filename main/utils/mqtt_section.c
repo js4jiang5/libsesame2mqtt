@@ -113,9 +113,9 @@ static void mqtt_event_handler(void * handler_args, esp_event_base_t base, int32
 		ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
 		// msg_id = esp_mqtt_client_subscribe(client, "HA-SesameLock/set", 2); // QOS 2
 		// ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-		if (mqtt_init_done) { // if MQTT broker disconnect and reconnect, reboot ESP. Currently I don't know a better way to solve it without reboot 20240522 by JS
-			esp_restart();
-		}
+		//if (mqtt_init_done) { // if MQTT broker disconnect and reconnect, reboot ESP. Currently I don't know a better way to solve it without reboot 20240522 by JS
+		//	esp_restart();
+		//}
 		mqtt_init_done = 1;
 		break;
 	case MQTT_EVENT_DISCONNECTED:
@@ -1004,10 +1004,11 @@ void mqtt_subscribe(void) {
 	}
 }
 
-static void mqtt_app_start(void) {
+static void mqtt_app_start(bool disable_clean_session) {
 	esp_mqtt_client_config_t mqtt_cfg = {
 		//.broker.address.uri = CONFIG_BROKER_URL,
 		.broker.address.uri = config_broker_url,
+		.session.disable_clean_session = disable_clean_session, // 20240622, try to solve the MQTT fail after reconnect issue
 	};
 #if CONFIG_BROKER_URL_FROM_STDIN
 	char line[128];
@@ -1042,12 +1043,28 @@ static void mqtt_app_start(void) {
 }
 
 void mqtt_start(void) {
-	mqtt_app_start();
+	mqtt_app_start(false); // first MQTT start with clean_session enabled
 	for (int n = 0; n < 600; n++) { // timeout after 60 seconds
 		if (mqtt_init_done) {
-			ESP_LOGI(TAG, "MQTT init done. Takes %f seconds", n * 0.1);
+			ESP_LOGI(TAG, "MQTT clean session init done. Takes %f seconds", n * 0.1);
 			break;
 		}
 		vTaskDelay(100 / portTICK_PERIOD_MS);
+	}
+	if (!mqtt_init_done) {
+		esp_restart();
+	} 
+	esp_mqtt_client_destroy(client_ssm);
+	mqtt_init_done = false;
+	mqtt_app_start(true); // 2nd MQTT start with clean_session disabled
+	for (int n = 0; n < 600; n++) { // timeout after 60 seconds
+		if (mqtt_init_done) {
+			ESP_LOGI(TAG, "MQTT persistent session init done. Takes %f seconds", n * 0.1);
+			break;
+		}
+		vTaskDelay(100 / portTICK_PERIOD_MS);
+	}
+	if (!mqtt_init_done) {
+		esp_restart();
 	}
 }

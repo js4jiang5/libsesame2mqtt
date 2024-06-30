@@ -75,6 +75,8 @@ static void wifi_event_handler(void * arg, esp_event_base_t event_base, int32_t 
 			ESP_LOGI(TAG, "retry to connect to the AP");
 		} else {
 			xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+			ESP_LOGI(TAG, "connect to the AP fail");
+			esp_restart();
 		}
 		ESP_LOGI(TAG, "connect to the AP fail");
 	} else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -136,7 +138,9 @@ void wifi_init_sta(void) {
 		ESP_LOGI(TAG, "connected to ap SSID:%s password:%s", config_wifi_ssid, config_wifi_password);
 	} else if (bits & WIFI_FAIL_BIT) {
 		ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s", config_wifi_ssid, config_wifi_password);
+		esp_restart();
 	} else {
 		ESP_LOGE(TAG, "UNEXPECTED EVENT");
+		esp_restart();
 	}
 }
