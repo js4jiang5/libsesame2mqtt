@@ -197,6 +197,9 @@ static void ssm_scan_connect(const struct ble_hs_adv_fields * fields, void * dis
 		for (int n = 0; n < cnt_ssms; n++) {
 			sesame *ssm = &(p_ssms_env + n)->ssm;													   // skip if the device was discovered already
 			if (memcmp(ssm->addr, addr->val, sizeof(uint8_t) * 6) == 0) {
+				if ((ssm->product_type == SESAME_5 || ssm->product_type == SESAME_5_PRO) && ssm->device_status < SSM_LOGGIN) { // if Sesame 5 or Sesame 5 PRO is logout unexpectedly, restart ESP32
+					esp_restart(); // 20241009
+				}
 				if (++ssm->cnt_discovery > 128) { // accumulate the number of times this device has been discovered
 					ssm->cnt_discovery = 128;	   // avoid saturation and wrap around
 				}
