@@ -83,6 +83,9 @@ static void reconnect_ssm(sesame * ssm) {
 	int rc = ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &addr, 30000, NULL, ble_gap_connect_event, ssm);
 	if (rc != 0) {
 		ESP_LOGE(TAG, "Error: Failed to connect to device; rc=%d\n", rc);
+		if ((ssm->product_type == SESAME_5 || ssm->product_type == SESAME_5_PRO) && ssm->mqtt_discovery_done) { // disconnect after MQTT discovery is done
+			esp_restart(); // 20241010
+		}
 		return;
 	}
 }
@@ -124,7 +127,11 @@ static int ble_gap_connect_event(struct ble_gap_event * event, void * arg) {
 		}
 		if (event->disconnect.reason == 531) { // Sesame teminate the connection. Should be caused by device reset
 			esp_restart();
+		} else if (event->disconnect.reason == 12) { // Sesame disconnect due to BLE_HS_ECONTROLLER
+			ESP_LOGE(TAG, "restart ESP, reason = 12");
+			esp_restart();
 		}
+
 		ble_gap_disc_cancel(); // stop BLE scan, added on 2024.04.17 by JS
 		vTaskDelay(600 / portTICK_PERIOD_MS);
 		reconnect_ssm(ssm);
